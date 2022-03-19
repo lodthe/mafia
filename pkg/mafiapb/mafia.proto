@@ -1,0 +1,163 @@
+syntax = "proto3";
+package mafia;
+
+option go_package = "github.com/lodthe/mafia/pkg/mafiapb";
+
+service Mafia {
+  rpc JoinGame (JoinGameRequest) returns (stream GameEvent);
+
+  rpc GetStatus (GetStatusRequest) returns (GetStatusResponse);
+  rpc GetPlayersWithRoles (GetPlayersWithRolesRequest) returns (GetPlayersWithRolesResponse);
+
+  rpc SendMessage (SendMessageRequest) returns (SendMessageResponse);
+
+  rpc DayVote (DayVoteRequest) returns (DayVoteResponse);
+  rpc NightVote (NightVoteRequest) returns (NightVoteResponse);
+  rpc CheckTeam (CheckTeamRequest) returns (CheckTeamResponse);
+}
+
+enum Role {
+  ROLE_UNKNOWN = 0;
+  ROLE_INNOCENT = 1;
+  ROLE_SHERIFF = 2;
+  ROLE_MAFIOSI = 3;
+}
+
+enum Team {
+  TEAM_UNKNOWN = 0;
+  TEAM_VILLAGERS = 1;
+  TEAM_MAFIA = 2;
+}
+
+message JoinGameRequest {
+  string username = 1;
+}
+
+message Player {
+  string username = 1;
+
+  bool alive = 2;
+}
+
+message PlayerWithRole {
+  Player player = 1;
+  Role role = 2;
+}
+
+message VotePaper {
+  Player voter = 1;
+  optional Player candidate = 2;
+}
+
+message GameEvent {
+  enum Type {
+    EVENT_UNKNOWN = 0;
+    EVENT_PLAYER_JOINED = 1;
+    EVENT_PLAYER_LEFT = 2;
+    EVENT_MESSAGE = 3;
+    EVENT_GAME_STARTED = 4;
+    EVENT_GAME_FINISHED = 5;
+    EVENT_DAY_STARTED = 6;
+    EVENT_NIGHT_STARTED = 7;
+  }
+
+  message PayloadPlayerJoined {
+    Player player = 1;
+  }
+
+  message PayloadPlayerLeft {
+    Player player = 1;
+  }
+
+  message PayloadMessage {
+    Player sender = 1;
+    string content = 2;
+  }
+
+  message PayloadGameStarted {
+    repeated Player players = 1;
+    Role role = 2;
+  }
+
+  message PayloadGameFinished {
+    Team winners = 1;
+    repeated PlayerWithRole players = 2;
+  }
+
+  message PayloadDayStarted {
+    uint64 day_id = 1;
+
+    // Who was killed that night.
+    optional Player killed_player = 2;
+  }
+
+  message PayloadNightStarted {
+    uint64 day_id = 1;
+
+    // Who was kicked that day.
+    optional Player kicked_player = 2;
+    repeated VotePaper votes = 3;
+  }
+
+  Type type = 1;
+
+  oneof payload {
+    PayloadPlayerJoined payload_player_joined = 5;
+    PayloadPlayerLeft payload_player_left = 6;
+    PayloadMessage payload_message = 7;
+    PayloadGameStarted payload_game_started = 8;
+    PayloadGameFinished payload_game_finished = 9;
+    PayloadDayStarted payload_day_started = 10;
+    PayloadNightStarted payload_night_started = 11;
+  }
+}
+
+message GetStatusRequest {
+}
+
+message GetStatusResponse {
+  repeated Player players = 1;
+  PlayerWithRole self = 2;
+
+  optional Team winners = 3;
+}
+
+message GetPlayersWithRolesRequest {
+}
+
+message GetPlayersWithRolesResponse {
+  repeated PlayerWithRole players = 1;
+}
+
+message SendMessageRequest {
+  string content = 1;
+}
+
+message SendMessageResponse {
+  uint64 receiver_count = 1;
+}
+
+message DayVoteRequest {
+  uint64 day_id = 1;
+  string username = 2;
+}
+
+message DayVoteResponse {
+}
+
+message NightVoteRequest {
+  uint64 day_id = 1;
+  string username = 2;
+}
+
+message NightVoteResponse {
+}
+
+message CheckTeamRequest {
+  string username = 1;
+}
+
+message CheckTeamResponse {
+  string username = 1;
+  Team team = 2;
+}
