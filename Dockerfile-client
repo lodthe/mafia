@@ -34,4 +34,4 @@ COPY --from=builder /opt/bin/client ./
 #COPY assets assets
 
 # Run the application.
-CMD ["./client"]
+ENTRYPOINT ["./client"]
