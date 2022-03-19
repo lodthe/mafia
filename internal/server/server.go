@@ -47,12 +47,17 @@ func (s *Server) JoinGame(in *mafiapb.JoinGameRequest, stream mafiapb.Mafia_Join
 		var event *mafiapb.GameEvent
 		select {
 		case <-s.ctx.Done():
+			return nil
+
 		case event = <-events:
 		}
 
 		err := stream.Send(event)
 		if err != nil {
 			log.Printf("failed to send an event: %v\n%v\n", err, event)
+
+			s.engine.RemovePlayer(sess)
+
 			break
 		}
 	}
@@ -97,4 +102,40 @@ func (s *Server) SendMessage(ctx context.Context, in *mafiapb.SendMessageRequest
 	return &mafiapb.SendMessageResponse{
 		ReceiverCount: uint64(len(receivers)),
 	}, nil
+}
+
+func (s *Server) DayVote(ctx context.Context, in *mafiapb.DayVoteRequest) (*mafiapb.DayVoteResponse, error) {
+	p, err := s.fetchPlayer(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if in.GetUsername() == "" {
+		return nil, errors.New("missed username")
+	}
+
+	err = s.engine.VoteKick(p, in.GetUsername())
+	if err != nil {
+		return nil, err
+	}
+
+	return &mafiapb.DayVoteResponse{}, nil
+}
+
+func (s *Server) NightVote(ctx context.Context, in *mafiapb.NightVoteRequest) (*mafiapb.NightVoteResponse, error) {
+	p, err := s.fetchPlayer(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if in.GetUsername() == "" {
+		return nil, errors.New("missed username")
+	}
+
+	err = s.engine.KillVote(p, in.GetUsername())
+	if err != nil {
+		return nil, err
+	}
+
+	return &mafiapb.NightVoteResponse{}, nil
 }

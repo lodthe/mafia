@@ -15,12 +15,11 @@ type Config struct {
 
 var DefaultConfig = Config{
 	RoleDistribution: map[player.Role]uint{
-		player.RoleInnocent: 2,
+		player.RoleInnocent: 3,
 		player.RoleMafiosi:  1,
-		player.RoleSheriff:  1,
 	},
 	DayDuration:   20 * time.Second,
-	NightDuration: 15 * time.Second,
+	NightDuration: 10 * time.Second,
 }
 
 func (c *Config) Players() uint {

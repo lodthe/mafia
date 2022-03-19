@@ -3,6 +3,7 @@ module github.com/lodthe/mafia
 go 1.17
 
 require (
+	github.com/davecgh/go-spew v1.1.1
 	github.com/google/uuid v1.1.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0

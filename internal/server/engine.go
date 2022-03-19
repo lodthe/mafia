@@ -77,6 +77,15 @@ func (e *Engine) AddPlayer(username string, events chan<- *mafiapb.GameEvent) (*
 	e.rolesToSelect[role] = e.rolesToSelect[role] - 1
 	e.playersLeft--
 
+	defer e.broadcast(e.latestGame, &mafiapb.GameEvent{
+		Type: mafiapb.GameEvent_EVENT_PLAYER_JOINED,
+		Payload: &mafiapb.GameEvent_PayloadPlayerJoined_{
+			PayloadPlayerJoined: &mafiapb.GameEvent_PayloadPlayerJoined{
+				Player: p.Proto(),
+			},
+		},
+	})
+
 	// If there are no free slots, start a game.
 	if e.playersLeft == 0 {
 		g := e.latestGame
@@ -86,6 +95,30 @@ func (e *Engine) AddPlayer(username string, events chan<- *mafiapb.GameEvent) (*
 	}
 
 	return sess, err
+}
+
+func (e *Engine) RemovePlayer(s *session.Session) {
+	p, err := e.FindPlayerBySessionID(s.ID)
+	if err != nil {
+		return
+	}
+
+	g, err := e.findGame(s.GameID)
+	if err != nil {
+		return
+	}
+
+	p.Kill()
+	g.CheckStatus()
+
+	e.broadcast(e.latestGame, &mafiapb.GameEvent{
+		Type: mafiapb.GameEvent_EVENT_PLAYER_LEFT,
+		Payload: &mafiapb.GameEvent_PayloadPlayerLeft_{
+			PayloadPlayerLeft: &mafiapb.GameEvent_PayloadPlayerLeft{
+				Player: p.Proto(),
+			},
+		},
+	})
 }
 
 func (e *Engine) hostNewGame() {
@@ -101,18 +134,80 @@ func (e *Engine) hostNewGame() {
 	e.addGame(e.latestGame)
 }
 
+func (e *Engine) broadcast(g *game.Game, event *mafiapb.GameEvent) {
+	for _, p := range g.Players() {
+		p.Session().SendNonBlocking(event)
+	}
+}
+
 func (e *Engine) startGame(g *game.Game) {
+	log.Printf("%s game stared\n", g)
+
 	for {
-		dayID := g.NewDay()
+		killedPlayer, dayID := g.NewDay()
 
 		log.Printf("%s day %d started\n", g, dayID)
+		if killedPlayer != nil {
+			log.Printf("%s %s was killed\n", g, killedPlayer.Username())
+		}
+
+		e.broadcast(g, &mafiapb.GameEvent{
+			Type: mafiapb.GameEvent_EVENT_DAY_STARTED,
+			Payload: &mafiapb.GameEvent_PayloadDayStarted_{
+				PayloadDayStarted: &mafiapb.GameEvent_PayloadDayStarted{
+					DayId:        uint64(dayID),
+					KilledPlayer: killedPlayer.Proto(),
+				},
+			},
+		})
+
+		g.CheckStatus()
+		if g.Winners() != nil {
+			e.endGame(g)
+			return
+		}
 
 		time.Sleep(e.config.DayDuration)
 
+		kickedPlayer := g.NewNight()
+
 		log.Printf("%s night %d started\n", g, dayID)
+		if kickedPlayer != nil {
+			log.Printf("%s %s was kicked\n", g, kickedPlayer.Username())
+		}
+
+		e.broadcast(g, &mafiapb.GameEvent{
+			Type: mafiapb.GameEvent_EVENT_NIGHT_STARTED,
+			Payload: &mafiapb.GameEvent_PayloadNightStarted_{
+				PayloadNightStarted: &mafiapb.GameEvent_PayloadNightStarted{
+					DayId:        uint64(dayID),
+					KickedPlayer: kickedPlayer.Proto(),
+				},
+			},
+		})
+
+		g.CheckStatus()
+		if g.Winners() != nil {
+			e.endGame(g)
+			return
+		}
 
 		time.Sleep(e.config.NightDuration)
 	}
+}
+
+func (e *Engine) endGame(g *game.Game) {
+	log.Printf("%s game finished\n", g)
+
+	e.broadcast(g, &mafiapb.GameEvent{
+		Type: mafiapb.GameEvent_EVENT_GAME_FINISHED,
+		Payload: &mafiapb.GameEvent_PayloadGameFinished_{
+			PayloadGameFinished: &mafiapb.GameEvent_PayloadGameFinished{
+				Winners: g.Winners().Proto(),
+				Players: nil,
+			},
+		},
+	})
 }
 
 func (e *Engine) SendMessage(sender *player.Player, content string) ([]*player.Player, error) {
@@ -141,6 +236,58 @@ func (e *Engine) SendMessage(sender *player.Player, content string) ([]*player.P
 	}
 
 	return receivers, nil
+}
+
+func (e *Engine) VoteKick(voter *player.Player, candidate string) error {
+	g, err := e.findGame(voter.Session().GameID)
+	if err != nil {
+		return err
+	}
+
+	if !voter.Alive() {
+		return errors.New("you are dead")
+	}
+
+	if !g.IsDayPhase() {
+		return errors.New("it's night now")
+	}
+
+	target, err := g.FindPlayer(candidate)
+	if err != nil {
+		return errors.New("invalid username")
+	}
+
+	g.AddKickVote(g.DayID(), voter, target)
+
+	return nil
+}
+
+func (e *Engine) KillVote(voter *player.Player, candidate string) error {
+	g, err := e.findGame(voter.Session().GameID)
+	if err != nil {
+		return err
+	}
+
+	if !voter.Alive() {
+		return errors.New("you are dead")
+	}
+
+	if voter.Role() != player.RoleMafiosi {
+		return errors.New("only mafiosi can kill")
+	}
+
+	if g.IsDayPhase() {
+		return errors.New("it's day now")
+	}
+
+	target, err := g.FindPlayer(candidate)
+	if err != nil {
+		return errors.New("invalid username")
+	}
+
+	g.AddKillVote(g.DayID(), voter, target)
+
+	return nil
 }
 
 func (e *Engine) FindPlayerBySessionID(id uuid.UUID) (*player.Player, error) {

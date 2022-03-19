@@ -54,6 +54,10 @@ func (p *Player) Kill() {
 }
 
 func (p *Player) Proto() *mafiapb.Player {
+	if p == nil {
+		return nil
+	}
+
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 

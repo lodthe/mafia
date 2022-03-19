@@ -41,8 +41,23 @@ func (e *Engine) handleEvents() {
 		}
 
 		switch event.GetType() {
+		case mafiapb.GameEvent_EVENT_PLAYER_JOINED:
+			e.handlePlayerJoinedEvent(event.GetPayloadPlayerJoined())
+
+		case mafiapb.GameEvent_EVENT_PLAYER_LEFT:
+			e.handlePlayerLeftEvent(event.GetPayloadPlayerLeft())
+
 		case mafiapb.GameEvent_EVENT_MESSAGE:
 			e.handleMessageEvent(event.GetPayloadMessage())
+
+		case mafiapb.GameEvent_EVENT_DAY_STARTED:
+			e.handleDayStartedEvent(event.GetPayloadDayStarted())
+
+		case mafiapb.GameEvent_EVENT_NIGHT_STARTED:
+			e.handleNightStartedEvent(event.GetPayloadNightStarted())
+
+		case mafiapb.GameEvent_EVENT_GAME_FINISHED:
+			e.handleGameFinishedEvent(event.GetPayloadGameFinished())
 
 		default:
 			e.sendWithPrompt(fmt.Sprintf("Received an event with type %s", event.GetType()))
@@ -50,8 +65,42 @@ func (e *Engine) handleEvents() {
 	}
 }
 
+func (e *Engine) handlePlayerJoinedEvent(payload *mafiapb.GameEvent_PayloadPlayerJoined) {
+	e.sendWithPrompt(fmt.Sprintf("%s joined the game", payload.GetPlayer().GetUsername()))
+}
+
+func (e *Engine) handlePlayerLeftEvent(payload *mafiapb.GameEvent_PayloadPlayerLeft) {
+	e.sendWithPrompt(fmt.Sprintf("%s left the game", payload.GetPlayer().GetUsername()))
+}
+
 func (e *Engine) handleMessageEvent(payload *mafiapb.GameEvent_PayloadMessage) {
 	e.sendWithPrompt(fmt.Sprintf("[%s]: %s", payload.GetSender().GetUsername(), payload.GetContent()))
+}
+
+func (e *Engine) handleDayStartedEvent(payload *mafiapb.GameEvent_PayloadDayStarted) {
+	var text string
+	if payload.GetKilledPlayer() != nil {
+		text += fmt.Sprintf("%s was murdered that night\n\n", payload.GetKilledPlayer().GetUsername())
+	}
+
+	text += fmt.Sprintf("Day No. %d started", payload.GetDayId())
+
+	e.sendWithPrompt(text)
+}
+
+func (e *Engine) handleNightStartedEvent(payload *mafiapb.GameEvent_PayloadNightStarted) {
+	var text string
+	if payload.GetKickedPlayer() != nil {
+		text += fmt.Sprintf("The majority voted to kick %s today\n\n", payload.GetKickedPlayer().GetUsername())
+	}
+
+	text += fmt.Sprintf("Night No. %d started", payload.GetDayId())
+
+	e.sendWithPrompt(text)
+}
+
+func (e *Engine) handleGameFinishedEvent(payload *mafiapb.GameEvent_PayloadGameFinished) {
+	e.sendWithPrompt(fmt.Sprintf("Game finished! Winners: %s", payload.GetWinners().String()))
 }
 
 func (e *Engine) handleUserInput() {
@@ -74,6 +123,12 @@ func (e *Engine) handleUserInput() {
 		case strings.HasPrefix(input, "send"):
 			e.handleSendCommand(input)
 
+		case strings.HasPrefix(input, "votekick"):
+			e.handleKickCommand(input)
+
+		case strings.HasPrefix(input, "votekill"):
+			e.handleKillCommand(input)
+
 		default:
 			e.sendError("Invalid command, please see help.")
 		}
@@ -90,6 +145,10 @@ Command list:
 > state - print the current state.
 
 > send [msg] - send a text message.
+
+> votekick [username] - vote for kick someone (available during the day).
+
+> votekill [username] - vote for kill someone (available for mafiosi during the night).
 
 ===========`
 
@@ -122,7 +181,33 @@ func (e *Engine) handleSendCommand(input string) {
 	e.sendWithPrompt(fmt.Sprintf("The message has been sent to %d players", receivers))
 }
 
+func (e *Engine) handleKickCommand(input string) {
+	username := input[len("votekick "):]
+
+	err := e.client.VoteKick(username)
+	if err != nil {
+		e.sendError(err.Error())
+		return
+	}
+
+	e.sendWithPrompt(fmt.Sprintf("You cast your vote for %s", username))
+}
+
+func (e *Engine) handleKillCommand(input string) {
+	username := input[len("votekill "):]
+
+	err := e.client.VoteKill(username)
+	if err != nil {
+		e.sendError(err.Error())
+		return
+	}
+
+	e.sendWithPrompt(fmt.Sprintf("You cast your vote for %s", username))
+}
+
 func (e *Engine) sendError(text string) {
+	text = strings.ReplaceAll(text, "rpc error: code = Unknown desc =", "")
+
 	e.sendWithPrompt("[ERROR] " + text)
 }
 
@@ -131,5 +216,9 @@ func (e *Engine) sendWithPrompt(text string) {
 
 	msg += "Send me something: "
 
-	e.messenger.Output() <- msg
+	e.send(msg)
+}
+
+func (e *Engine) send(text string) {
+	e.messenger.Output() <- text
 }

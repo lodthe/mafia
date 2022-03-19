@@ -69,3 +69,15 @@ func (c *Client) SendMessage(content string) (receivers uint, err error) {
 
 	return uint(resp.GetReceiverCount()), nil
 }
+
+func (c *Client) VoteKick(username string) error {
+	_, err := c.cli.DayVote(c.ctx, &mafiapb.DayVoteRequest{Username: username})
+
+	return err
+}
+
+func (c *Client) VoteKill(username string) error {
+	_, err := c.cli.NightVote(c.ctx, &mafiapb.NightVoteRequest{Username: username})
+
+	return err
+}

@@ -23,8 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MafiaClient interface {
 	JoinGame(ctx context.Context, in *JoinGameRequest, opts ...grpc.CallOption) (Mafia_JoinGameClient, error)
-	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error)
-	GetPlayersWithRoles(ctx context.Context, in *GetPlayersWithRolesRequest, opts ...grpc.CallOption) (*GetPlayersWithRolesResponse, error)
+	GetGameState(ctx context.Context, in *GetGameStateRequest, opts ...grpc.CallOption) (*GetGameStateResponse, error)
 	SendMessage(ctx context.Context, in *SendMessageRequest, opts ...grpc.CallOption) (*SendMessageResponse, error)
 	DayVote(ctx context.Context, in *DayVoteRequest, opts ...grpc.CallOption) (*DayVoteResponse, error)
 	NightVote(ctx context.Context, in *NightVoteRequest, opts ...grpc.CallOption) (*NightVoteResponse, error)
@@ -71,18 +70,9 @@ func (x *mafiaJoinGameClient) Recv() (*GameEvent, error) {
 	return m, nil
 }
 
-func (c *mafiaClient) GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error) {
-	out := new(GetStatusResponse)
-	err := c.cc.Invoke(ctx, "/mafia.Mafia/GetStatus", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mafiaClient) GetPlayersWithRoles(ctx context.Context, in *GetPlayersWithRolesRequest, opts ...grpc.CallOption) (*GetPlayersWithRolesResponse, error) {
-	out := new(GetPlayersWithRolesResponse)
-	err := c.cc.Invoke(ctx, "/mafia.Mafia/GetPlayersWithRoles", in, out, opts...)
+func (c *mafiaClient) GetGameState(ctx context.Context, in *GetGameStateRequest, opts ...grpc.CallOption) (*GetGameStateResponse, error) {
+	out := new(GetGameStateResponse)
+	err := c.cc.Invoke(ctx, "/mafia.Mafia/GetGameState", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +120,7 @@ func (c *mafiaClient) CheckTeam(ctx context.Context, in *CheckTeamRequest, opts 
 // for forward compatibility
 type MafiaServer interface {
 	JoinGame(*JoinGameRequest, Mafia_JoinGameServer) error
-	GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error)
-	GetPlayersWithRoles(context.Context, *GetPlayersWithRolesRequest) (*GetPlayersWithRolesResponse, error)
+	GetGameState(context.Context, *GetGameStateRequest) (*GetGameStateResponse, error)
 	SendMessage(context.Context, *SendMessageRequest) (*SendMessageResponse, error)
 	DayVote(context.Context, *DayVoteRequest) (*DayVoteResponse, error)
 	NightVote(context.Context, *NightVoteRequest) (*NightVoteResponse, error)
@@ -146,11 +135,8 @@ type UnimplementedMafiaServer struct {
 func (UnimplementedMafiaServer) JoinGame(*JoinGameRequest, Mafia_JoinGameServer) error {
 	return status.Errorf(codes.Unimplemented, "method JoinGame not implemented")
 }
-func (UnimplementedMafiaServer) GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
-}
-func (UnimplementedMafiaServer) GetPlayersWithRoles(context.Context, *GetPlayersWithRolesRequest) (*GetPlayersWithRolesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetPlayersWithRoles not implemented")
+func (UnimplementedMafiaServer) GetGameState(context.Context, *GetGameStateRequest) (*GetGameStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGameState not implemented")
 }
 func (UnimplementedMafiaServer) SendMessage(context.Context, *SendMessageRequest) (*SendMessageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendMessage not implemented")
@@ -198,38 +184,20 @@ func (x *mafiaJoinGameServer) Send(m *GameEvent) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Mafia_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetStatusRequest)
+func _Mafia_GetGameState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGameStateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MafiaServer).GetStatus(ctx, in)
+		return srv.(MafiaServer).GetGameState(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/mafia.Mafia/GetStatus",
+		FullMethod: "/mafia.Mafia/GetGameState",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MafiaServer).GetStatus(ctx, req.(*GetStatusRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Mafia_GetPlayersWithRoles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetPlayersWithRolesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MafiaServer).GetPlayersWithRoles(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mafia.Mafia/GetPlayersWithRoles",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MafiaServer).GetPlayersWithRoles(ctx, req.(*GetPlayersWithRolesRequest))
+		return srv.(MafiaServer).GetGameState(ctx, req.(*GetGameStateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -314,12 +282,8 @@ var Mafia_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*MafiaServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetStatus",
-			Handler:    _Mafia_GetStatus_Handler,
-		},
-		{
-			MethodName: "GetPlayersWithRoles",
-			Handler:    _Mafia_GetPlayersWithRoles_Handler,
+			MethodName: "GetGameState",
+			Handler:    _Mafia_GetGameState_Handler,
 		},
 		{
 			MethodName: "SendMessage",
