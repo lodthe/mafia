@@ -81,3 +81,7 @@ func (c *Client) VoteKill(username string) error {
 
 	return err
 }
+
+func (c *Client) GetState() (*mafiapb.GetGameStateResponse, error) {
+	return c.cli.GetGameState(c.ctx, &mafiapb.GetGameStateRequest{})
+}

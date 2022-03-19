@@ -103,7 +103,7 @@ func (e *Engine) RemovePlayer(s *session.Session) {
 		return
 	}
 
-	g, err := e.findGame(s.GameID)
+	g, err := e.FindGameByID(s.GameID)
 	if err != nil {
 		return
 	}
@@ -211,7 +211,7 @@ func (e *Engine) endGame(g *game.Game) {
 }
 
 func (e *Engine) SendMessage(sender *player.Player, content string) ([]*player.Player, error) {
-	g, err := e.findGame(sender.Session().GameID)
+	g, err := e.FindGameByID(sender.Session().GameID)
 	if err != nil {
 		return nil, err
 	}
@@ -239,9 +239,17 @@ func (e *Engine) SendMessage(sender *player.Player, content string) ([]*player.P
 }
 
 func (e *Engine) VoteKick(voter *player.Player, candidate string) error {
-	g, err := e.findGame(voter.Session().GameID)
+	g, err := e.FindGameByID(voter.Session().GameID)
 	if err != nil {
 		return err
+	}
+
+	if g.DayID() == 0 {
+		return errors.New("game not started")
+	}
+
+	if g.Winners() != nil {
+		return errors.New("game finished")
 	}
 
 	if !voter.Alive() {
@@ -263,9 +271,17 @@ func (e *Engine) VoteKick(voter *player.Player, candidate string) error {
 }
 
 func (e *Engine) KillVote(voter *player.Player, candidate string) error {
-	g, err := e.findGame(voter.Session().GameID)
+	g, err := e.FindGameByID(voter.Session().GameID)
 	if err != nil {
 		return err
+	}
+
+	if g.DayID() == 0 {
+		return errors.New("game not started")
+	}
+
+	if g.Winners() != nil {
+		return errors.New("game finished")
 	}
 
 	if !voter.Alive() {
@@ -296,7 +312,7 @@ func (e *Engine) FindPlayerBySessionID(id uuid.UUID) (*player.Player, error) {
 		return nil, err
 	}
 
-	g, err := e.findGame(s.GameID)
+	g, err := e.FindGameByID(s.GameID)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +351,7 @@ func (e *Engine) addGame(g *game.Game) {
 	e.games[g.ID()] = g
 }
 
-func (e *Engine) findGame(id uuid.UUID) (*game.Game, error) {
+func (e *Engine) FindGameByID(id uuid.UUID) (*game.Game, error) {
 	e.gamesLocker.RLock()
 	defer e.gamesLocker.RUnlock()
 

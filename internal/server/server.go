@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/lodthe/mafia/internal/server/player"
 	"github.com/lodthe/mafia/pkg/mafiapb"
@@ -138,4 +139,47 @@ func (s *Server) NightVote(ctx context.Context, in *mafiapb.NightVoteRequest) (*
 	}
 
 	return &mafiapb.NightVoteResponse{}, nil
+}
+
+func (s *Server) GetGameState(ctx context.Context, in *mafiapb.GetGameStateRequest) (*mafiapb.GetGameStateResponse, error) {
+	p, err := s.fetchPlayer(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	g, err := s.engine.FindGameByID(p.Session().GameID)
+	if err != nil {
+		return nil, err
+	}
+
+	players := g.Players()
+	response := &mafiapb.GetGameStateResponse{
+		Self:    p.Proto(),
+		Players: make([]*mafiapb.Player, 0, len(g.Players())),
+	}
+
+	role := p.Role().Proto()
+	response.Self.Role = &role
+
+	if g.Winners() != nil {
+		team := g.Winners().Proto()
+		response.Winners = &team
+	}
+
+	for _, other := range players {
+		showRole := g.Winners() != nil
+		showRole = showRole || !p.Alive()
+		showRole = showRole || strings.EqualFold(p.Username(), other.Username())
+		showRole = showRole || (p.Role() == player.RoleMafiosi && other.Role() == player.RoleMafiosi)
+
+		converted := other.Proto()
+		if showRole {
+			role := other.Role().Proto()
+			converted.Role = &role
+		}
+
+		response.Players = append(response.Players, converted)
+	}
+
+	return response, nil
 }

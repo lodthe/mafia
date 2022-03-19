@@ -160,9 +160,45 @@ Command list:
 }
 
 func (e *Engine) sendState() {
-	state := "state"
+	state, err := e.client.GetState()
+	if err != nil {
+		e.sendError(err.Error())
+		return
+	}
 
-	e.sendWithPrompt(state)
+	text := "=== MAFIA ===:\n\n"
+
+	text += fmt.Sprintf("Your username: %s\n\n", state.GetSelf().GetUsername())
+
+	text += "Players:\n"
+	for _, p := range state.GetPlayers() {
+		text += fmt.Sprintf("\n[%s] %s", e.roleToString(p.GetRole()), p.GetUsername())
+		if !p.GetAlive() {
+			text += " [x]"
+		}
+	}
+
+	if state.GetWinners() != mafiapb.Team_TEAM_UNKNOWN {
+		text += "\n\nWinners: " + state.GetWinners().String()
+	}
+
+	e.sendWithPrompt(text)
+}
+
+func (e *Engine) roleToString(r mafiapb.Role) string {
+	switch r {
+	case mafiapb.Role_ROLE_INNOCENT:
+		return "INNOCENT"
+
+	case mafiapb.Role_ROLE_SHERIFF:
+		return "SHERIFF"
+
+	case mafiapb.Role_ROLE_MAFIOSI:
+		return "MAFIOSI"
+
+	default:
+		return ""
+	}
 }
 
 func (e *Engine) handleSendCommand(input string) {
